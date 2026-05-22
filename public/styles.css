@@ -1,0 +1,164 @@
+:root {
+  --bg: #0c1220;
+  --panel: #18233b;
+  --panel2: #0d162a;
+  --text: #e8f0ff;
+  --accent: #5eead4;
+  --danger: #ff6b6b;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(circle at 20% 20%, #17213a, #090d17 60%);
+  color: var(--text);
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  touch-action: none;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 8, 14, 0.78);
+  z-index: 10;
+}
+
+.panel {
+  width: min(90vw, 460px);
+  padding: 22px;
+  border: 2px solid #2c3f67;
+  background: linear-gradient(160deg, var(--panel), var(--panel2));
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+
+.panel h1 { margin-top: 0; }
+.panel input, .panel button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #38507f;
+  background: #101b31;
+  color: var(--text);
+}
+
+.panel button {
+  background: linear-gradient(160deg, #2f6de0, #2563eb);
+  cursor: pointer;
+  border: 0;
+  font-weight: 700;
+}
+
+.hud {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  display: grid;
+  gap: 8px;
+  max-width: min(92vw, 320px);
+  z-index: 2;
+}
+
+.hud-block {
+  background: rgba(14, 24, 42, 0.85);
+  border: 1px solid #2e446f;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+#scoreboard div,
+#killfeed div { margin-top: 4px; }
+
+.dead {
+  color: var(--danger);
+}
+
+.mobile-controls {
+  display: none;
+}
+
+.joystick-base {
+  position: fixed;
+  left: 14px;
+  bottom: 16px;
+  width: 118px;
+  height: 118px;
+  border-radius: 50%;
+  background: rgba(12, 22, 39, 0.58);
+  border: 1px solid rgba(133, 164, 210, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 6;
+}
+
+.joystick-knob {
+  position: absolute;
+  left: 39px;
+  top: 39px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(159, 196, 255, 0.9);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+}
+
+.fire-btn {
+  position: fixed;
+  right: 16px;
+  bottom: 24px;
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 163, 144, 0.6);
+  background: rgba(112, 25, 28, 0.64);
+  color: #ffe9e7;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  z-index: 6;
+}
+
+@media (max-width: 900px), (hover: none) and (pointer: coarse) {
+  .hud {
+    top: 6px;
+    left: 6px;
+    gap: 5px;
+    max-width: 62vw;
+  }
+
+  .hud-block {
+    font-size: 12px;
+    line-height: 1.15;
+    padding: 6px 7px;
+    border-radius: 6px;
+  }
+
+  #scoreboard div,
+  #killfeed div {
+    margin-top: 2px;
+  }
+
+  .mobile-controls {
+    display: block;
+  }
+}

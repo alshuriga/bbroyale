@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Pixel Deathmatch</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="overlay" class="overlay">
+      <div class="panel">
+        <h1>Pixel Deathmatch</h1>
+        <p>Top-down free-for-all. WASD move, mouse aim, hold click to fire, 1/2 switch weapon.</p>
+        <input id="nameInput" maxlength="14" placeholder="Name" />
+        <button id="playBtn">Play</button>
+      </div>
+    </div>
+
+    <canvas id="game"></canvas>
+
+    <div class="hud">
+      <div class="hud-block" id="roomCode"></div>
+      <div class="hud-block" id="weapon"></div>
+      <div class="hud-block" id="health"></div>
+      <div class="hud-block"><strong>Score</strong><div id="scoreboard"></div></div>
+      <div class="hud-block"><strong>Feed</strong><div id="killfeed"></div></div>
+    </div>
+
+    <div id="mobileControls" class="mobile-controls">
+      <div id="joystickBase" class="joystick-base">
+        <div id="joystickKnob" class="joystick-knob"></div>
+      </div>
+      <button id="fireBtn" class="fire-btn" aria-label="Fire">FIRE</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js" defer></script>
+    <script src="/game.js" defer></script>
+  </body>
+</html>

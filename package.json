@@ -1,0 +1,18 @@
+{
+  "name": "bbroyale",
+  "version": "1.0.0",
+  "description": "Top-down pixel multiplayer deathmatch",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "send:status": "node scripts/send-status-email.js",
+    "deploy:vercel": "bash scripts/deploy-vercel.sh"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "nanoid": "^5.0.7",
+    "socket.io": "^4.8.3",
+    "ws": "^8.17.0"
+  }
+}

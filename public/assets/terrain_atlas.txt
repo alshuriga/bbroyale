@@ -1,0 +1,45 @@
+This is a comprehensive layout and structural description for a large 2D top-down RPG terrain and structure spritesheet named "terrain_atlas.png". Use this mapping to guide the script in slicing, auto-tiling, and layering assets.
+
+### General Design System
+- **Autotiles & Terrains:** Usually grouped in square clusters or 3-row vertical patterns (Top: transitions/corners, Middle: filled center patches, Bottom: horizontal looping floor strips).
+- **Structures & Bridges:** Multi-tile objects meant to be reconstructed using pixel offsets or tile indices.
+- **Decorations/Props:** Scattered loose items on transparent backgrounds meant for foreground/object layers.
+
+---
+
+### Layout Breakdown by Zones
+
+#### 1. Upper-Left Zone: Elevations, Cliffs & Caves
+- **Top-Left Corner:** Tall brown mountain cliffs, vertical drop edges, narrow canyon walls, and cave openings. Includes a wooden ladder and a rope bridge asset for vertical transitions.
+- **Mid-Left (Below Cliffs):** Desert sand shorelines, a small oasis, and deep blue water ponds with grass borders (standard 3-row autotile format).
+- **Far-Left Strip (Isometric):** A large pre-rendered block of grey brick/stone pavement with weeds in the seams.
+
+#### 2. Upper-Center & Upper-Right Zone: Pits, Liquids & Autotiles
+- **Top Row (Center-Right):** Dark swamp/murky water vertical strips next to dirt pit transitions, empty voids (pure black pit), and a pine tree icon.
+- **Row 3-5 (Center):** - Red-orange glowing lava pools and dark volcanic rock/obsidian cracked ground patches.
+  - Classic dirt autotiles (light brown, medium brown, dark brown).
+  - Dense green hedges, bush autotiles, and a stone pedestal.
+- **Far-Right Column (Upper):** Massive stone stairs / temple steps leading upwards, transitioning into grey stone tile patterns.
+
+#### 3. Mid-Right & Center Zone: Landmarks, Waterfalls & Bridges
+- **Center Assets (Ruins & Moai):** A stone Easter Island (Moai) statue, stone pillars, broken arches, vines, and scattered ancient stone blocks.
+- **Mid-Right Columns:** A vertical looping waterfall tile that flows down into a light blue animated water surface texture. 
+- **Bridges:** - A horizontal arched wooden bridge (complete with side railings).
+  - An extended wooden dock/pier system including straight walkways, wooden steps, supportive pillars, and rope-fenced walkways.
+
+#### 4. Lower-Left Zone: Hedges, Crops & Farming
+- **Mid-Left Columns:** Tall green corn/reed crops forming thick walls, alongside patches of tilled farming soil.
+- **Lower-Left Blocks:** Light green grassy hedges, tall straw/hay bales, and dark green leafy hedges.
+- **Bottom-Left Corner:** Agricultural farming rows showing crop growth stages (carrots, tomatoes, corn stalks, berry bushes, and tilled dirt mounds), flanked by small flower/lily pad detailing strips.
+
+#### 5. Lower-Center & Lower-Right Zone: Architecture, Dungeons & Rocks
+- **Lower-Center (Dungeon Walls):** Dark grey brick/stone dungeon walls, ruined house profiles, and brown brick walls with transparent cutouts/holes for broken wall layering. Includes a set of wooden double doors / gates.
+- **Lower-Right (Props & Foliage):** - A large variety of loose rocks, heavy grey boulders, and brown stones.
+  - Fresh tree stumps and cut logs.
+  - Assorted natural details: cattails, red mushrooms, small shrubs, and large leafy green trees.
+
+---
+
+### Implementation Instructions for Code Integration:
+- **Layering Order:** 1. Base Floor (Seamless strips of grass, dirt, sand, lava, stone floor).
+  2. Fringe/Walls (Cliffs, dungeon walls, ruined
