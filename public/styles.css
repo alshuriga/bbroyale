@@ -181,6 +181,26 @@ html, body {
   z-index: 6;
 }
 
+.weapon-switch {
+  position: fixed;
+  right: 22px;
+  bottom: 122px;
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  gap: 6px;
+  z-index: 6;
+}
+.weapon-btn {
+  width: 34px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(166, 194, 233, 0.7);
+  background: rgba(16, 35, 63, 0.82);
+  color: #e5efff;
+  font-weight: 700;
+  font-size: 12px;
+}
+
 @media (max-width: 900px), (hover: none) and (pointer: coarse) {
   .hud {
     top: 6px;

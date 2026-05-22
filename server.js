@@ -76,6 +76,15 @@ const WEAPONS = {
     spread: 0.045,
     pelletCount: 1,
   },
+  shotgun: {
+    name: 'Shotgun',
+    damage: 8,
+    fireCooldown: 560,
+    bulletSpeed: 760,
+    bulletLife: 520,
+    spread: 0.32,
+    pelletCount: 8,
+  },
 };
 
 const rooms = new Map();
@@ -429,7 +438,7 @@ function createBotPlayer(room) {
     lastDamagedAt: Date.now(),
     kills: 0,
     deaths: 0,
-    weapon: Math.random() > 0.5 ? 'rifle' : 'pistol',
+    weapon: Math.random() > 0.66 ? 'rifle' : Math.random() > 0.5 ? 'shotgun' : 'pistol',
     lastShotAt: 0,
     rapidFireUntil: 0,
     shieldUntil: 0,
@@ -753,7 +762,7 @@ io.on('connection', (socket) => {
 
     if (msg.type === 'weapon') {
       const weapon = msg.payload?.weapon;
-      if (weapon === 'pistol' || weapon === 'rifle') {
+      if (weapon === 'pistol' || weapon === 'rifle' || weapon === 'shotgun') {
         player.weapon = weapon;
       }
     }
@@ -898,12 +907,13 @@ function updateBotAI(room, bot, now) {
   }
 
   bot.aimAngle = Math.atan2(target.y - bot.y, target.x - bot.x);
-  const desired = bot.weapon === 'rifle' ? 520 : 420;
+  const desired = bot.weapon === 'rifle' ? 520 : bot.weapon === 'shotgun' ? 260 : 420;
   bot.input.moveToAim = best > desired;
   bot.input.firing = best < 520;
   bot.input.grenade = best > 120 && best < 300 && Math.random() < 0.02;
   if (now % 7000 < 25 && Math.random() > 0.5) {
-    bot.weapon = bot.weapon === 'rifle' ? 'pistol' : 'rifle';
+    const roll = Math.random();
+    bot.weapon = roll < 0.34 ? 'pistol' : roll < 0.67 ? 'rifle' : 'shotgun';
   }
 }
 

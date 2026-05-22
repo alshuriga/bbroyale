@@ -17,6 +17,9 @@ const joystickKnobEl = document.getElementById('joystickKnob');
 const fireBtnEl = document.getElementById('fireBtn');
 const dashBtnEl = document.getElementById('dashBtn');
 const grenadeBtnEl = document.getElementById('grenadeBtn');
+const wp1BtnEl = document.getElementById('wp1Btn');
+const wp2BtnEl = document.getElementById('wp2Btn');
+const wp3BtnEl = document.getElementById('wp3Btn');
 const minimapCtx = minimapEl ? minimapEl.getContext('2d') : null;
 
 const state = {
@@ -231,6 +234,36 @@ function initMobileControls() {
       { passive: false }
     );
   }
+  if (wp1BtnEl) {
+    wp1BtnEl.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        send('weapon', { weapon: 'pistol' });
+      },
+      { passive: false }
+    );
+  }
+  if (wp2BtnEl) {
+    wp2BtnEl.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        send('weapon', { weapon: 'rifle' });
+      },
+      { passive: false }
+    );
+  }
+  if (wp3BtnEl) {
+    wp3BtnEl.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        send('weapon', { weapon: 'shotgun' });
+      },
+      { passive: false }
+    );
+  }
 
   const updateGlobalTouch = (touch) => {
     if (state.mobile.stickTouchId == null || !state.mobile.active) return;
@@ -375,6 +408,7 @@ document.addEventListener('keydown', (e) => {
   key(e.key.toLowerCase(), true);
   if (e.key === '1') send('weapon', { weapon: 'pistol' });
   if (e.key === '2') send('weapon', { weapon: 'rifle' });
+  if (e.key === '3') send('weapon', { weapon: 'shotgun' });
   if (e.key === 'Shift' || e.key === ' ') triggerDash();
   if (e.key.toLowerCase() === 'e') triggerGrenade();
   sendInput(true);
@@ -937,7 +971,8 @@ function render() {
     healthEl.innerHTML = me.alive
       ? `HP: ${Math.round(me.hp)}${outside ? ' <span class="dead">OUTSIDE ZONE</span>' : ''}`
       : '<span class="dead">Respawning...</span>';
-    weaponEl.textContent = `Weapon: ${me.weapon === 'rifle' ? 'Rifle [2]' : 'Pistol [1]'}`;
+    const weaponName = me.weapon === 'rifle' ? 'Rifle [2]' : me.weapon === 'shotgun' ? 'Shotgun [3]' : 'Pistol [1]';
+    weaponEl.textContent = `Weapon: ${weaponName}`;
     const dashLeft = Math.max(0, Math.round((me.nextDashAt || 0) - Date.now()));
     const grenadeLeft = Math.max(0, Math.round((me.nextGrenadeAt || 0) - Date.now()));
     const dashText = dashLeft > 0 ? `Dash ${(dashLeft / 1000).toFixed(1)}s` : 'Dash READY';

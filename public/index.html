@@ -13,7 +13,7 @@
     <div id="overlay" class="overlay">
       <div class="panel">
         <h1>Pixel Deathmatch</h1>
-        <p>Top-down free-for-all. WASD move, mouse aim, hold click to fire, 1/2 switch weapon, Shift dash, E grenade.</p>
+        <p>Top-down free-for-all. WASD move, mouse aim, hold click to fire, 1/2/3 switch weapon, Shift dash, E grenade.</p>
         <input id="nameInput" maxlength="14" placeholder="Name" />
         <button id="playBtn">Play</button>
       </div>
@@ -34,6 +34,11 @@
     <div id="mobileControls" class="mobile-controls">
       <div id="joystickBase" class="joystick-base">
         <div id="joystickKnob" class="joystick-knob"></div>
+      </div>
+      <div class="weapon-switch">
+        <button id="wp1Btn" class="weapon-btn" aria-label="Pistol">1</button>
+        <button id="wp2Btn" class="weapon-btn" aria-label="Rifle">2</button>
+        <button id="wp3Btn" class="weapon-btn" aria-label="Shotgun">3</button>
       </div>
       <button id="dashBtn" class="dash-btn" aria-label="Dash">DASH</button>
       <button id="grenadeBtn" class="grenade-btn" aria-label="Grenade">GRENADE</button>
