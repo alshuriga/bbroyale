@@ -20,6 +20,8 @@ const state = {
   myId: '',
   players: [],
   bullets: [],
+  pickups: [],
+  zone: null,
   killFeed: [],
   rules: null,
   map: null,
@@ -48,12 +50,12 @@ const state = {
 };
 
 const PLAYER_RADIUS = 14;
-const PLAYER_LERP = 0.42;
+const PLAYER_LERP = 0.55;
 const LOCAL_PLAYER_LERP = 0.85;
 const BULLET_LERP = 0.72;
 const INPUT_SEND_MS = 16;
 const MOUSE_SEND_MS = 16;
-const CORRECTION_LERP = 0.18;
+const CORRECTION_LERP = 0.28;
 
 const assets = {
   player: new Image(),
@@ -306,6 +308,8 @@ function connectAndJoin(name) {
       state.players = msg.payload.players;
       state.bullets = msg.payload.bullets;
       state.killFeed = msg.payload.killFeed;
+      state.pickups = msg.payload.pickups || [];
+      state.zone = msg.payload.zone || null;
       syncRenderState();
     }
   });
@@ -398,6 +402,8 @@ function syncRenderState() {
     existing.weapon = p.weapon;
     existing.color = p.color;
     existing.name = p.name;
+    existing.rapidFire = !!p.rapidFire;
+    existing.shielded = !!p.shielded;
   }
   for (const id of [...state.renderPlayers.keys()]) {
     if (!nextPlayers.has(id)) state.renderPlayers.delete(id);
@@ -613,6 +619,25 @@ function drawMap() {
   }
 }
 
+function drawZone() {
+  if (!state.zone) return;
+  const s = worldToScreen(state.zone.centerX, state.zone.centerY);
+  ctx.save();
+  ctx.fillStyle = 'rgba(14, 19, 31, 0.42)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, state.zone.radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.strokeStyle = 'rgba(255, 98, 98, 0.9)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, state.zone.radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function worldToScreen(x, y) {
   return { x: x - state.camX + canvas.width / 2, y: y - state.camY + canvas.height / 2 };
 }
@@ -666,6 +691,34 @@ function render() {
   }
 
   drawMap();
+  drawZone();
+
+  for (const pickup of state.pickups) {
+    const s = worldToScreen(pickup.x, pickup.y);
+    const x = Math.round(s.x);
+    const y = Math.round(s.y);
+    if (pickup.type === 'medkit') {
+      ctx.fillStyle = '#d64f4f';
+      ctx.fillRect(x - 7, y - 7, 14, 14);
+      ctx.fillStyle = '#fff4f4';
+      ctx.fillRect(x - 2, y - 5, 4, 10);
+      ctx.fillRect(x - 5, y - 2, 10, 4);
+    } else if (pickup.type === 'rapidfire') {
+      ctx.fillStyle = '#ffb347';
+      ctx.fillRect(x - 6, y - 6, 12, 12);
+      ctx.fillStyle = '#fff3d7';
+      ctx.fillRect(x - 1, y - 5, 2, 10);
+      ctx.fillRect(x - 3, y - 1, 6, 2);
+    } else {
+      ctx.fillStyle = '#7dc9ff';
+      ctx.fillRect(x - 7, y - 7, 14, 14);
+      ctx.fillStyle = '#e7f7ff';
+      ctx.fillRect(x - 4, y - 4, 8, 8);
+    }
+    ctx.strokeStyle = '#0f1726';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 7, y - 7, 14, 14);
+  }
 
   for (const b of state.renderBullets.values()) {
     const s = worldToScreen(b.x, b.y);
@@ -738,12 +791,23 @@ function render() {
       ctx.moveTo(Math.round(s.x), Math.round(s.y));
       ctx.lineTo(Math.round(s.x + Math.cos(angle) * 24), Math.round(s.y + Math.sin(angle) * 24));
       ctx.stroke();
+      if (p.rapidFire || p.shielded) {
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#eaf2ff';
+        const tags = `${p.rapidFire ? 'RF ' : ''}${p.shielded ? 'SH' : ''}`.trim();
+        ctx.fillText(tags, Math.round(s.x - 10), Math.round(s.y + 24));
+      }
     }
   }
 
   roomCodeEl.textContent = state.roomId ? `Room: ${state.roomId}` : 'Room: -';
   if (me) {
-    healthEl.innerHTML = me.alive ? `HP: ${Math.round(me.hp)}` : '<span class="dead">Respawning...</span>';
+    const z = state.zone;
+    const outside =
+      z && Math.hypot((me.x || 0) - z.centerX, (me.y || 0) - z.centerY) > z.radius;
+    healthEl.innerHTML = me.alive
+      ? `HP: ${Math.round(me.hp)}${outside ? ' <span class="dead">OUTSIDE ZONE</span>' : ''}`
+      : '<span class="dead">Respawning...</span>';
     weaponEl.textContent = `Weapon: ${me.weapon === 'rifle' ? 'Rifle [2]' : 'Pistol [1]'}`;
   }
 

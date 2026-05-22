@@ -19,11 +19,11 @@ function nanoid(size = 6) {
   return id;
 }
 const PORT = process.env.PORT || 3000;
-const REPORT_INTERVAL_MS = 30 * 60 * 1000;
+const REPORT_INTERVAL_MS = 10 * 60 * 1000;
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const REPORT_EMAIL_TO = process.env.REPORT_EMAIL_TO || 'alshuriga@gmail.com';
 const REPORT_EMAIL_FROM = process.env.REPORT_EMAIL_FROM || '';
-const REPORT_EMAIL_SUBJECT = process.env.REPORT_EMAIL_SUBJECT || 'BBRoyale 30-min report';
+const REPORT_EMAIL_SUBJECT = process.env.REPORT_EMAIL_SUBJECT || 'BBRoyale 10-min report';
 const RESEND_API_KEY =
   process.env.RESEND_API_KEY ||
   (process.env.NODE_ENV !== 'production' ? readLocalSecret('resend-api-key.txt') : '');
@@ -43,6 +43,11 @@ const BOT_DAMAGE_MULT = 0.55;
 const BOT_FIRE_CHANCE = 0.55;
 const HEAL_DELAY_MS = 2000;
 const FULL_HEAL_TIME_SEC = 4;
+const PICKUP_MAX_PER_ROOM = 7;
+const PICKUP_SPAWN_EVERY_MS = 6000;
+const PICKUP_LIFETIME_MS = 18000;
+const ZONE_STAGE_MS = 30000;
+const ZONE_DAMAGE_PER_SEC = 12;
 
 const WEAPONS = {
   pistol: {
@@ -167,6 +172,16 @@ function generateMapLayout() {
   return map;
 }
 
+function buildZoneForStage(stage) {
+  const minRadius = MAP_SIZE * 0.15;
+  const maxRadius = MAP_SIZE * 0.62;
+  const radius = Math.max(minRadius, maxRadius - stage * MAP_SIZE * 0.085);
+  const drift = Math.min(stage * 42, 180);
+  const centerX = MAP_SIZE / 2 + randomInt(-drift, drift);
+  const centerY = MAP_SIZE / 2 + randomInt(-drift, drift);
+  return { centerX, centerY, radius, stage };
+}
+
 function pointInRect(x, y, rect, pad = 0) {
   return (
     x >= rect.x + pad &&
@@ -270,6 +285,7 @@ function randomPatrolPoint(map) {
 
 function createRoom() {
   const id = nanoid();
+  const zone = buildZoneForStage(0);
   const room = {
     id,
     map: generateMapLayout(),
@@ -277,6 +293,11 @@ function createRoom() {
     bullets: new Map(),
     bulletSeq: 0,
     killFeed: [],
+    pickups: new Map(),
+    pickupSeq: 0,
+    nextPickupAt: Date.now() + 2500,
+    zone,
+    nextZoneAt: Date.now() + ZONE_STAGE_MS,
   };
   rooms.set(id, room);
   return room;
@@ -286,6 +307,7 @@ function getOrCreateRoom(roomId) {
   if (!roomId) return createRoom();
   const existing = rooms.get(roomId);
   if (existing) return existing;
+  const zone = buildZoneForStage(0);
   const room = {
     id: roomId,
     map: generateMapLayout(),
@@ -293,12 +315,18 @@ function getOrCreateRoom(roomId) {
     bullets: new Map(),
     bulletSeq: 0,
     killFeed: [],
+    pickups: new Map(),
+    pickupSeq: 0,
+    nextPickupAt: Date.now() + 2500,
+    zone,
+    nextZoneAt: Date.now() + ZONE_STAGE_MS,
   };
   rooms.set(roomId, room);
   return room;
 }
 
 function toPublicPlayer(player) {
+  const now = Date.now();
   return {
     id: player.id,
     name: player.name,
@@ -313,6 +341,8 @@ function toPublicPlayer(player) {
     weapon: player.weapon,
     color: player.color,
     isBot: !!player.isBot,
+    rapidFire: now < (player.rapidFireUntil || 0),
+    shielded: now < (player.shieldUntil || 0),
   };
 }
 
@@ -386,6 +416,8 @@ function createBotPlayer(room) {
     deaths: 0,
     weapon: Math.random() > 0.5 ? 'rifle' : 'pistol',
     lastShotAt: 0,
+    rapidFireUntil: 0,
+    shieldUntil: 0,
     aimAngle: 0,
     input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: true },
     color: '#ff9f43',
@@ -416,6 +448,75 @@ function syncBotsForRoom(room) {
 function randomColor() {
   const colors = ['#4ecdc4', '#ff6b6b', '#ffd166', '#95e06c', '#73a9ff'];
   return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function spawnPickup(room, now) {
+  const roll = Math.random();
+  const type = roll < 0.5 ? 'medkit' : roll < 0.85 ? 'rapidfire' : 'shield';
+  const spawn = randomSpawn(room.map);
+  const id = `${room.id}-p-${room.pickupSeq++}`;
+  room.pickups.set(id, {
+    id,
+    type,
+    x: spawn.x,
+    y: spawn.y,
+    expiresAt: now + PICKUP_LIFETIME_MS,
+  });
+}
+
+function maybeSpawnPickups(room, now) {
+  for (const [id, pickup] of room.pickups.entries()) {
+    if (pickup.expiresAt <= now) room.pickups.delete(id);
+  }
+  if (now < room.nextPickupAt) return;
+  room.nextPickupAt = now + PICKUP_SPAWN_EVERY_MS;
+  if (room.pickups.size >= PICKUP_MAX_PER_ROOM) return;
+  spawnPickup(room, now);
+}
+
+function applyPickup(player, pickup, now) {
+  if (pickup.type === 'medkit') {
+    player.hp = Math.min(player.maxHp, player.hp + Math.round(player.maxHp * 0.35));
+    return;
+  }
+  if (pickup.type === 'rapidfire') {
+    player.rapidFireUntil = now + 6000;
+    return;
+  }
+  if (pickup.type === 'shield') {
+    player.shieldUntil = now + 4500;
+  }
+}
+
+function updatePickupCollection(room, now) {
+  for (const player of room.players.values()) {
+    if (!player.alive) continue;
+    for (const [pickupId, pickup] of room.pickups.entries()) {
+      if (Math.hypot(player.x - pickup.x, player.y - pickup.y) > PLAYER_RADIUS + 10) continue;
+      applyPickup(player, pickup, now);
+      room.pickups.delete(pickupId);
+    }
+  }
+}
+
+function maybeAdvanceZone(room, now) {
+  if (now < room.nextZoneAt) return;
+  const nextStage = (room.zone?.stage || 0) + 1;
+  room.zone = buildZoneForStage(nextStage);
+  room.nextZoneAt = now + ZONE_STAGE_MS;
+}
+
+function applyZoneDamage(room, player, dt, now) {
+  if (!player.alive || !room.zone) return;
+  const dx = player.x - room.zone.centerX;
+  const dy = player.y - room.zone.centerY;
+  const outside = Math.hypot(dx, dy) > room.zone.radius;
+  if (!outside) return;
+  player.hp -= ZONE_DAMAGE_PER_SEC * dt;
+  player.lastDamagedAt = now;
+  if (player.hp <= 0) {
+    killPlayer(room, player, null);
+  }
 }
 
 function collectRuntimeStats() {
@@ -564,6 +665,8 @@ io.on('connection', (socket) => {
         deaths: 0,
         weapon: 'pistol',
         lastShotAt: 0,
+        rapidFireUntil: 0,
+        shieldUntil: 0,
         aimAngle: 0,
         input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false },
         color: randomColor(),
@@ -583,6 +686,8 @@ io.on('connection', (socket) => {
           respawnMs: RESPAWN_MS,
           playerSpeed: BASE_PLAYER_SPEED,
           tickRate: TICK_RATE,
+          zoneStageMs: ZONE_STAGE_MS,
+          zoneDamagePerSec: ZONE_DAMAGE_PER_SEC,
           weapons: WEAPONS,
         },
       });
@@ -591,6 +696,8 @@ io.on('connection', (socket) => {
         players: [...room.players.values()].map(toPublicPlayer),
         bullets: [...room.bullets.values()],
         killFeed: room.killFeed,
+        pickups: [...room.pickups.values()],
+        zone: room.zone,
       });
       return;
     }
@@ -675,7 +782,9 @@ function maybeFire(room, player, now) {
   if (!player.alive || !player.input.firing) return;
   const weapon = WEAPONS[player.weapon];
   if (!weapon) return;
-  if (now - player.lastShotAt < weapon.fireCooldown) return;
+  const fireCooldown =
+    now < (player.rapidFireUntil || 0) ? Math.max(70, Math.round(weapon.fireCooldown * 0.65)) : weapon.fireCooldown;
+  if (now - player.lastShotAt < fireCooldown) return;
 
   player.lastShotAt = now;
   if (player.isBot && Math.random() > BOT_FIRE_CHANCE) return;
@@ -793,7 +902,8 @@ function updateBullets(room, now, dt) {
       const d = Math.hypot(player.x - bullet.x, player.y - bullet.y);
       if (d > PLAYER_RADIUS + 4) continue;
 
-      player.hp -= bullet.damage;
+      const damageMult = now < (player.shieldUntil || 0) ? 0.65 : 1;
+      player.hp -= Math.round(bullet.damage * damageMult);
       player.lastDamagedAt = now;
       room.bullets.delete(bulletId);
       if (player.hp <= 0) {
@@ -833,20 +943,26 @@ setInterval(() => {
 
   for (const room of rooms.values()) {
     syncBotsForRoom(room);
+    maybeAdvanceZone(room, now);
     for (const player of room.players.values()) {
       maybeRespawn(room, player, now);
       if (player.isBot) updateBotAI(room, player, now);
       if (player.alive) updatePlayerMovement(room, player, dt);
       maybeFire(room, player, now);
       maybeHeal(player, now, dt);
+      applyZoneDamage(room, player, dt, now);
     }
 
     updateBullets(room, now, dt);
+    maybeSpawnPickups(room, now);
+    updatePickupCollection(room, now);
 
     broadcast(room, 'room_state', {
       players: [...room.players.values()].map(toPublicPlayer),
       bullets: [...room.bullets.values()],
       killFeed: room.killFeed,
+      pickups: [...room.pickups.values()],
+      zone: room.zone,
     });
   }
 }, 1000 / TICK_RATE);
