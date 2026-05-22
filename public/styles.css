@@ -87,6 +87,18 @@ html, body {
   padding: 8px 10px;
   font-size: 14px;
 }
+.minimap-wrap {
+  padding: 6px;
+}
+#minimap {
+  width: 132px;
+  height: 132px;
+  display: block;
+  image-rendering: pixelated;
+  background: rgba(5, 10, 18, 0.9);
+  border: 1px solid #3d5a8e;
+  border-radius: 6px;
+}
 
 #scoreboard div,
 #killfeed div { margin-top: 4px; }
@@ -166,6 +178,10 @@ html, body {
     line-height: 1.15;
     padding: 6px 7px;
     border-radius: 6px;
+  }
+  #minimap {
+    width: 94px;
+    height: 94px;
   }
 
   #scoreboard div,

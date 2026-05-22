@@ -8,6 +8,7 @@ const roomCodeEl = document.getElementById('roomCode');
 const weaponEl = document.getElementById('weapon');
 const healthEl = document.getElementById('health');
 const dashStatusEl = document.getElementById('dashStatus');
+const minimapEl = document.getElementById('minimap');
 const scoreboardEl = document.getElementById('scoreboard');
 const killfeedEl = document.getElementById('killfeed');
 const mobileControlsEl = document.getElementById('mobileControls');
@@ -15,6 +16,7 @@ const joystickBaseEl = document.getElementById('joystickBase');
 const joystickKnobEl = document.getElementById('joystickKnob');
 const fireBtnEl = document.getElementById('fireBtn');
 const dashBtnEl = document.getElementById('dashBtn');
+const minimapCtx = minimapEl ? minimapEl.getContext('2d') : null;
 
 const state = {
   ws: null,
@@ -660,6 +662,41 @@ function drawZone() {
   ctx.restore();
 }
 
+function drawMinimap() {
+  if (!minimapCtx || !state.rules?.mapSize) return;
+  const mm = minimapCtx;
+  const size = minimapEl.width;
+  const mapSize = state.rules.mapSize;
+  const scale = size / mapSize;
+  mm.clearRect(0, 0, size, size);
+  mm.fillStyle = '#0b1424';
+  mm.fillRect(0, 0, size, size);
+
+  mm.fillStyle = '#2b4a33';
+  for (const c of state.map?.corridors || []) {
+    mm.fillRect(Math.round(c.x * scale), Math.round(c.y * scale), Math.max(1, Math.round(c.w * scale)), Math.max(1, Math.round(c.h * scale)));
+  }
+  mm.fillStyle = '#6a533f';
+  for (const r of state.map?.rooms || []) {
+    mm.fillRect(Math.round(r.x * scale), Math.round(r.y * scale), Math.max(1, Math.round(r.w * scale)), Math.max(1, Math.round(r.h * scale)));
+  }
+
+  if (state.zone) {
+    mm.strokeStyle = '#ff7070';
+    mm.lineWidth = 2;
+    mm.beginPath();
+    mm.arc(state.zone.centerX * scale, state.zone.centerY * scale, state.zone.radius * scale, 0, Math.PI * 2);
+    mm.stroke();
+  }
+
+  for (const p of state.renderPlayers.values()) {
+    mm.fillStyle = p.id === state.myId ? '#e5f1ff' : p.isBot ? '#ffb16b' : '#8ec5ff';
+    mm.fillRect(Math.round(p.x * scale) - 1, Math.round(p.y * scale) - 1, 3, 3);
+  }
+  mm.strokeStyle = '#47618a';
+  mm.strokeRect(0.5, 0.5, size - 1, size - 1);
+}
+
 function worldToScreen(x, y) {
   return { x: x - state.camX + canvas.width / 2, y: y - state.camY + canvas.height / 2 };
 }
@@ -714,6 +751,7 @@ function render() {
 
   drawMap();
   drawZone();
+  drawMinimap();
 
   for (const pickup of state.pickups) {
     const s = worldToScreen(pickup.x, pickup.y);

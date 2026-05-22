@@ -691,6 +691,7 @@ io.on('connection', (socket) => {
         map: room.map,
         rules: {
           maxPlayers: MAX_PLAYERS_PER_ROOM,
+          mapSize: MAP_SIZE,
           startHp: START_HP,
           respawnMs: RESPAWN_MS,
           playerSpeed: BASE_PLAYER_SPEED,
