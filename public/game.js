@@ -7,12 +7,14 @@ const nameInput = document.getElementById('nameInput');
 const roomCodeEl = document.getElementById('roomCode');
 const weaponEl = document.getElementById('weapon');
 const healthEl = document.getElementById('health');
+const dashStatusEl = document.getElementById('dashStatus');
 const scoreboardEl = document.getElementById('scoreboard');
 const killfeedEl = document.getElementById('killfeed');
 const mobileControlsEl = document.getElementById('mobileControls');
 const joystickBaseEl = document.getElementById('joystickBase');
 const joystickKnobEl = document.getElementById('joystickKnob');
 const fireBtnEl = document.getElementById('fireBtn');
+const dashBtnEl = document.getElementById('dashBtn');
 
 const state = {
   ws: null,
@@ -22,10 +24,11 @@ const state = {
   bullets: [],
   pickups: [],
   zone: null,
+  serverNow: Date.now(),
   killFeed: [],
   rules: null,
   map: null,
-  input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, aimAngle: 0 },
+  input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false, aimAngle: 0 },
   camX: 0,
   camY: 0,
   renderPlayers: new Map(),
@@ -202,6 +205,16 @@ function initMobileControls() {
   };
   fireBtnEl.addEventListener('touchend', releaseFire, { passive: false });
   fireBtnEl.addEventListener('touchcancel', releaseFire, { passive: false });
+  if (dashBtnEl) {
+    dashBtnEl.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        triggerDash();
+      },
+      { passive: false }
+    );
+  }
 
   const updateGlobalTouch = (touch) => {
     if (state.mobile.stickTouchId == null || !state.mobile.active) return;
@@ -261,7 +274,7 @@ function initMobileControls() {
 
 function inputSignature() {
   const i = state.input;
-  return `${+i.up}${+i.down}${+i.left}${+i.right}${+i.firing}${+i.moveToAim}|${i.aimAngle.toFixed(3)}`;
+  return `${+i.up}${+i.down}${+i.left}${+i.right}${+i.firing}${+i.moveToAim}${+i.dash}|${i.aimAngle.toFixed(3)}`;
 }
 
 function sendInput(force = false) {
@@ -272,6 +285,13 @@ function sendInput(force = false) {
   send('input', state.input);
   state.lastInputSentAt = now;
   state.lastInputSignature = sig;
+}
+
+function triggerDash() {
+  state.input.dash = true;
+  sendInput(true);
+  state.input.dash = false;
+  sendInput(true);
 }
 
 function connectAndJoin(name) {
@@ -310,6 +330,7 @@ function connectAndJoin(name) {
       state.killFeed = msg.payload.killFeed;
       state.pickups = msg.payload.pickups || [];
       state.zone = msg.payload.zone || null;
+      state.serverNow = Number(msg.payload.serverNow || Date.now());
       syncRenderState();
     }
   });
@@ -330,6 +351,7 @@ document.addEventListener('keydown', (e) => {
   key(e.key.toLowerCase(), true);
   if (e.key === '1') send('weapon', { weapon: 'pistol' });
   if (e.key === '2') send('weapon', { weapon: 'rifle' });
+  if (e.key === 'Shift' || e.key === ' ') triggerDash();
   sendInput(true);
 });
 
@@ -809,6 +831,8 @@ function render() {
       ? `HP: ${Math.round(me.hp)}${outside ? ' <span class="dead">OUTSIDE ZONE</span>' : ''}`
       : '<span class="dead">Respawning...</span>';
     weaponEl.textContent = `Weapon: ${me.weapon === 'rifle' ? 'Rifle [2]' : 'Pistol [1]'}`;
+    const dashLeft = Math.max(0, Math.round((me.nextDashAt || 0) - Date.now()));
+    dashStatusEl.textContent = dashLeft > 0 ? `Dash: ${(dashLeft / 1000).toFixed(1)}s` : 'Dash: READY [Shift]';
   }
 
   scoreboardEl.innerHTML = [...state.renderPlayers.values()]

@@ -13,7 +13,7 @@
     <div id="overlay" class="overlay">
       <div class="panel">
         <h1>Pixel Deathmatch</h1>
-        <p>Top-down free-for-all. WASD move, mouse aim, hold click to fire, 1/2 switch weapon.</p>
+        <p>Top-down free-for-all. WASD move, mouse aim, hold click to fire, 1/2 switch weapon, Shift dash.</p>
         <input id="nameInput" maxlength="14" placeholder="Name" />
         <button id="playBtn">Play</button>
       </div>
@@ -25,6 +25,7 @@
       <div class="hud-block" id="roomCode"></div>
       <div class="hud-block" id="weapon"></div>
       <div class="hud-block" id="health"></div>
+      <div class="hud-block" id="dashStatus"></div>
       <div class="hud-block"><strong>Score</strong><div id="scoreboard"></div></div>
       <div class="hud-block"><strong>Feed</strong><div id="killfeed"></div></div>
     </div>
@@ -33,6 +34,7 @@
       <div id="joystickBase" class="joystick-base">
         <div id="joystickKnob" class="joystick-knob"></div>
       </div>
+      <button id="dashBtn" class="dash-btn" aria-label="Dash">DASH</button>
       <button id="fireBtn" class="fire-btn" aria-label="Fire">FIRE</button>
     </div>
 

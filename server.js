@@ -48,6 +48,9 @@ const PICKUP_SPAWN_EVERY_MS = 6000;
 const PICKUP_LIFETIME_MS = 18000;
 const ZONE_STAGE_MS = 30000;
 const ZONE_DAMAGE_PER_SEC = 12;
+const DASH_COOLDOWN_MS = 2800;
+const DASH_DURATION_MS = 180;
+const DASH_SPEED_MULT = 2.8;
 
 const WEAPONS = {
   pistol: {
@@ -343,6 +346,8 @@ function toPublicPlayer(player) {
     isBot: !!player.isBot,
     rapidFire: now < (player.rapidFireUntil || 0),
     shielded: now < (player.shieldUntil || 0),
+    dashUntil: player.dashUntil || 0,
+    nextDashAt: player.nextDashAt || 0,
   };
 }
 
@@ -419,11 +424,13 @@ function createBotPlayer(room) {
     rapidFireUntil: 0,
     shieldUntil: 0,
     aimAngle: 0,
-    input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: true },
+    input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: true, dash: false },
     color: '#ff9f43',
     patrolX: patrol.x,
     patrolY: patrol.y,
     nextPatrolAt: Date.now() + randomInt(1800, 4200),
+    dashUntil: 0,
+    nextDashAt: 0,
   };
 }
 
@@ -667,8 +674,10 @@ io.on('connection', (socket) => {
         lastShotAt: 0,
         rapidFireUntil: 0,
         shieldUntil: 0,
+        dashUntil: 0,
+        nextDashAt: 0,
         aimAngle: 0,
-        input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false },
+        input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false },
         color: randomColor(),
       };
 
@@ -688,6 +697,7 @@ io.on('connection', (socket) => {
           tickRate: TICK_RATE,
           zoneStageMs: ZONE_STAGE_MS,
           zoneDamagePerSec: ZONE_DAMAGE_PER_SEC,
+          dashCooldownMs: DASH_COOLDOWN_MS,
           weapons: WEAPONS,
         },
       });
@@ -698,6 +708,7 @@ io.on('connection', (socket) => {
         killFeed: room.killFeed,
         pickups: [...room.pickups.values()],
         zone: room.zone,
+        serverNow: Date.now(),
       });
       return;
     }
@@ -717,6 +728,7 @@ io.on('connection', (socket) => {
         right: !!msg.payload?.right,
         firing: !!msg.payload?.firing,
         moveToAim: !!msg.payload?.moveToAim,
+        dash: !!msg.payload?.dash,
       };
       player.aimAngle = Number(msg.payload?.aimAngle || 0);
       return;
@@ -735,9 +747,17 @@ io.on('connection', (socket) => {
 
 function updatePlayerMovement(room, player, dt) {
   const map = room.map;
+  const now = Date.now();
+  if (player.input.dash && now >= (player.nextDashAt || 0) && player.alive) {
+    player.dashUntil = now + DASH_DURATION_MS;
+    player.nextDashAt = now + DASH_COOLDOWN_MS;
+    player.input.dash = false;
+  }
+  const speedMult = now < (player.dashUntil || 0) ? DASH_SPEED_MULT : 1;
+  const currentSpeed = player.speed * speedMult;
   if (player.input.moveToAim) {
-    player.vx = Math.cos(player.aimAngle) * player.speed;
-    player.vy = Math.sin(player.aimAngle) * player.speed;
+    player.vx = Math.cos(player.aimAngle) * currentSpeed;
+    player.vy = Math.sin(player.aimAngle) * currentSpeed;
     const nx = player.x + player.vx * dt;
     const ny = player.y + player.vy * dt;
     if (canPlaceCircle(map, nx, ny, PLAYER_RADIUS)) {
@@ -762,8 +782,8 @@ function updatePlayerMovement(room, player, dt) {
     player.vy = 0;
   } else {
     const len = Math.hypot(x, y);
-    player.vx = (x / len) * player.speed;
-    player.vy = (y / len) * player.speed;
+    player.vx = (x / len) * currentSpeed;
+    player.vy = (y / len) * currentSpeed;
   }
 
   const nx = player.x + player.vx * dt;
@@ -963,6 +983,7 @@ setInterval(() => {
       killFeed: room.killFeed,
       pickups: [...room.pickups.values()],
       zone: room.zone,
+      serverNow: now,
     });
   }
 }, 1000 / TICK_RATE);
