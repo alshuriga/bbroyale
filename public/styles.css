@@ -180,6 +180,21 @@ html, body {
   font-size: 10px;
   z-index: 6;
 }
+.reload-btn {
+  position: fixed;
+  right: 258px;
+  bottom: 40px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 1px solid rgba(170, 255, 183, 0.75);
+  background: rgba(24, 97, 46, 0.7);
+  color: #e8ffe9;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  font-size: 10px;
+  z-index: 6;
+}
 
 .weapon-switch {
   position: fixed;

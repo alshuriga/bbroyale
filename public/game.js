@@ -6,6 +6,7 @@ const playBtn = document.getElementById('playBtn');
 const nameInput = document.getElementById('nameInput');
 const roomCodeEl = document.getElementById('roomCode');
 const weaponEl = document.getElementById('weapon');
+const ammoStatusEl = document.getElementById('ammoStatus');
 const healthEl = document.getElementById('health');
 const dashStatusEl = document.getElementById('dashStatus');
 const minimapEl = document.getElementById('minimap');
@@ -16,6 +17,7 @@ const joystickBaseEl = document.getElementById('joystickBase');
 const joystickKnobEl = document.getElementById('joystickKnob');
 const fireBtnEl = document.getElementById('fireBtn');
 const dashBtnEl = document.getElementById('dashBtn');
+const reloadBtnEl = document.getElementById('reloadBtn');
 const grenadeBtnEl = document.getElementById('grenadeBtn');
 const wp1BtnEl = document.getElementById('wp1Btn');
 const wp2BtnEl = document.getElementById('wp2Btn');
@@ -35,7 +37,7 @@ const state = {
   killFeed: [],
   rules: null,
   map: null,
-  input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false, grenade: false, aimAngle: 0 },
+  input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false, grenade: false, reload: false, aimAngle: 0 },
   camX: 0,
   camY: 0,
   renderPlayers: new Map(),
@@ -234,6 +236,16 @@ function initMobileControls() {
       { passive: false }
     );
   }
+  if (reloadBtnEl) {
+    reloadBtnEl.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        triggerReload();
+      },
+      { passive: false }
+    );
+  }
   if (wp1BtnEl) {
     wp1BtnEl.addEventListener(
       'touchstart',
@@ -323,7 +335,7 @@ function initMobileControls() {
 
 function inputSignature() {
   const i = state.input;
-  return `${+i.up}${+i.down}${+i.left}${+i.right}${+i.firing}${+i.moveToAim}${+i.dash}${+i.grenade}|${i.aimAngle.toFixed(3)}`;
+  return `${+i.up}${+i.down}${+i.left}${+i.right}${+i.firing}${+i.moveToAim}${+i.dash}${+i.grenade}${+i.reload}|${i.aimAngle.toFixed(3)}`;
 }
 
 function sendInput(force = false) {
@@ -347,6 +359,13 @@ function triggerGrenade() {
   state.input.grenade = true;
   sendInput(true);
   state.input.grenade = false;
+  sendInput(true);
+}
+
+function triggerReload() {
+  state.input.reload = true;
+  sendInput(true);
+  state.input.reload = false;
   sendInput(true);
 }
 
@@ -411,6 +430,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '3') send('weapon', { weapon: 'shotgun' });
   if (e.key === 'Shift' || e.key === ' ') triggerDash();
   if (e.key.toLowerCase() === 'e') triggerGrenade();
+  if (e.key.toLowerCase() === 'r') triggerReload();
   sendInput(true);
 });
 
@@ -487,6 +507,8 @@ function syncRenderState() {
     existing.shielded = !!p.shielded;
     existing.nextDashAt = p.nextDashAt || 0;
     existing.nextGrenadeAt = p.nextGrenadeAt || 0;
+    existing.ammo = p.ammo || 0;
+    existing.reloadingUntil = p.reloadingUntil || 0;
   }
   for (const id of [...state.renderPlayers.keys()]) {
     if (!nextPlayers.has(id)) state.renderPlayers.delete(id);
@@ -973,6 +995,8 @@ function render() {
       : '<span class="dead">Respawning...</span>';
     const weaponName = me.weapon === 'rifle' ? 'Rifle [2]' : me.weapon === 'shotgun' ? 'Shotgun [3]' : 'Pistol [1]';
     weaponEl.textContent = `Weapon: ${weaponName}`;
+    const reloadLeft = Math.max(0, Math.round((me.reloadingUntil || 0) - Date.now()));
+    ammoStatusEl.textContent = reloadLeft > 0 ? `Ammo: reloading ${(reloadLeft / 1000).toFixed(1)}s` : `Ammo: ${me.ammo ?? 0}`;
     const dashLeft = Math.max(0, Math.round((me.nextDashAt || 0) - Date.now()));
     const grenadeLeft = Math.max(0, Math.round((me.nextGrenadeAt || 0) - Date.now()));
     const dashText = dashLeft > 0 ? `Dash ${(dashLeft / 1000).toFixed(1)}s` : 'Dash READY';

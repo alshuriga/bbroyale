@@ -66,6 +66,8 @@ const WEAPONS = {
     bulletLife: 900,
     spread: 0.02,
     pelletCount: 1,
+    magSize: 12,
+    reloadMs: 950,
   },
   rifle: {
     name: 'Rifle',
@@ -75,6 +77,8 @@ const WEAPONS = {
     bulletLife: 750,
     spread: 0.045,
     pelletCount: 1,
+    magSize: 24,
+    reloadMs: 1250,
   },
   shotgun: {
     name: 'Shotgun',
@@ -84,6 +88,8 @@ const WEAPONS = {
     bulletLife: 520,
     spread: 0.32,
     pelletCount: 8,
+    magSize: 6,
+    reloadMs: 1550,
   },
 };
 
@@ -367,6 +373,8 @@ function toPublicPlayer(player) {
     dashUntil: player.dashUntil || 0,
     nextDashAt: player.nextDashAt || 0,
     nextGrenadeAt: player.nextGrenadeAt || 0,
+    ammo: player.ammo || 0,
+    reloadingUntil: player.reloadingUntil || 0,
   };
 }
 
@@ -439,11 +447,15 @@ function createBotPlayer(room) {
     kills: 0,
     deaths: 0,
     weapon: Math.random() > 0.66 ? 'rifle' : Math.random() > 0.5 ? 'shotgun' : 'pistol',
+    ammo: 24,
+    reloadingUntil: 0,
     lastShotAt: 0,
     rapidFireUntil: 0,
     shieldUntil: 0,
     aimAngle: 0,
-    input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: true, dash: false, grenade: false },
+    input: {
+      up: false, down: false, left: false, right: false, firing: false, moveToAim: true, dash: false, grenade: false, reload: false,
+    },
     color: '#ff9f43',
     patrolX: patrol.x,
     patrolY: patrol.y,
@@ -691,6 +703,8 @@ io.on('connection', (socket) => {
         kills: 0,
         deaths: 0,
         weapon: 'pistol',
+        ammo: 12,
+        reloadingUntil: 0,
         lastShotAt: 0,
         rapidFireUntil: 0,
         shieldUntil: 0,
@@ -698,7 +712,9 @@ io.on('connection', (socket) => {
         nextDashAt: 0,
         nextGrenadeAt: 0,
         aimAngle: 0,
-        input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false, grenade: false },
+        input: {
+          up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false, grenade: false, reload: false,
+        },
         color: randomColor(),
       };
 
@@ -755,6 +771,7 @@ io.on('connection', (socket) => {
         moveToAim: !!msg.payload?.moveToAim,
         dash: !!msg.payload?.dash,
         grenade: !!msg.payload?.grenade,
+        reload: !!msg.payload?.reload,
       };
       player.aimAngle = Number(msg.payload?.aimAngle || 0);
       return;
@@ -763,7 +780,11 @@ io.on('connection', (socket) => {
     if (msg.type === 'weapon') {
       const weapon = msg.payload?.weapon;
       if (weapon === 'pistol' || weapon === 'rifle' || weapon === 'shotgun') {
+        const oldAmmo = player.ammo || 0;
         player.weapon = weapon;
+        const mag = WEAPONS[weapon]?.magSize || 1;
+        player.ammo = oldAmmo > 0 ? Math.min(oldAmmo, mag) : mag;
+        player.reloadingUntil = 0;
       }
     }
   });
@@ -828,11 +849,14 @@ function maybeFire(room, player, now) {
   if (!player.alive || !player.input.firing) return;
   const weapon = WEAPONS[player.weapon];
   if (!weapon) return;
+  if ((player.reloadingUntil || 0) > now) return;
+  if ((player.ammo || 0) <= 0) return;
   const fireCooldown =
     now < (player.rapidFireUntil || 0) ? Math.max(70, Math.round(weapon.fireCooldown * 0.65)) : weapon.fireCooldown;
   if (now - player.lastShotAt < fireCooldown) return;
 
   player.lastShotAt = now;
+  player.ammo = Math.max(0, (player.ammo || 0) - 1);
   if (player.isBot && Math.random() > BOT_FIRE_CHANCE) return;
   for (let i = 0; i < weapon.pelletCount; i += 1) {
     const spreadMult = player.isBot ? 2.4 : 1;
@@ -851,6 +875,27 @@ function maybeFire(room, player, now) {
       expiresAt: now + weapon.bulletLife,
     });
   }
+}
+
+function maybeReload(player, now) {
+  const weapon = WEAPONS[player.weapon];
+  if (!weapon || !player.alive) return;
+  if ((player.reloadingUntil || 0) > now) return;
+  const mag = weapon.magSize || 1;
+  const ammo = player.ammo || 0;
+  const wantsReload = !!player.input.reload || ammo <= 0;
+  if (!wantsReload || ammo >= mag) return;
+  player.reloadingUntil = now + weapon.reloadMs;
+  player.input.reload = false;
+}
+
+function finishReloadIfNeeded(player, now) {
+  if (!player.alive) return;
+  if (!(player.reloadingUntil > 0) || now < player.reloadingUntil) return;
+  const weapon = WEAPONS[player.weapon];
+  if (!weapon) return;
+  player.ammo = weapon.magSize;
+  player.reloadingUntil = 0;
 }
 
 function maybeThrowGrenade(room, player, now) {
@@ -910,6 +955,7 @@ function updateBotAI(room, bot, now) {
   const desired = bot.weapon === 'rifle' ? 520 : bot.weapon === 'shotgun' ? 260 : 420;
   bot.input.moveToAim = best > desired;
   bot.input.firing = best < 520;
+  bot.input.reload = (bot.ammo || 0) <= 0 || ((bot.ammo || 0) < 2 && Math.random() < 0.02);
   bot.input.grenade = best > 120 && best < 300 && Math.random() < 0.02;
   if (now % 7000 < 25 && Math.random() > 0.5) {
     const roll = Math.random();
@@ -1025,6 +1071,9 @@ function maybeRespawn(room, player, now) {
   const spawn = randomSpawn(room.map);
   player.x = spawn.x;
   player.y = spawn.y;
+  const weapon = WEAPONS[player.weapon] || WEAPONS.pistol;
+  player.ammo = weapon.magSize || 1;
+  player.reloadingUntil = 0;
   player.hp = player.maxHp;
   player.lastDamagedAt = now;
   player.alive = true;
@@ -1050,6 +1099,8 @@ setInterval(() => {
     for (const player of room.players.values()) {
       maybeRespawn(room, player, now);
       if (player.isBot) updateBotAI(room, player, now);
+      finishReloadIfNeeded(player, now);
+      maybeReload(player, now);
       if (player.alive) updatePlayerMovement(room, player, dt);
       maybeFire(room, player, now);
       maybeThrowGrenade(room, player, now);
