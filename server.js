@@ -51,6 +51,11 @@ const ZONE_DAMAGE_PER_SEC = 12;
 const DASH_COOLDOWN_MS = 2800;
 const DASH_DURATION_MS = 180;
 const DASH_SPEED_MULT = 2.8;
+const GRENADE_COOLDOWN_MS = 4200;
+const GRENADE_FUSE_MS = 900;
+const GRENADE_SPEED = 520;
+const GRENADE_RADIUS = 90;
+const GRENADE_DAMAGE = 42;
 
 const WEAPONS = {
   pistol: {
@@ -294,7 +299,9 @@ function createRoom() {
     map: generateMapLayout(),
     players: new Map(),
     bullets: new Map(),
+    grenades: new Map(),
     bulletSeq: 0,
+    grenadeSeq: 0,
     killFeed: [],
     pickups: new Map(),
     pickupSeq: 0,
@@ -316,7 +323,9 @@ function getOrCreateRoom(roomId) {
     map: generateMapLayout(),
     players: new Map(),
     bullets: new Map(),
+    grenades: new Map(),
     bulletSeq: 0,
+    grenadeSeq: 0,
     killFeed: [],
     pickups: new Map(),
     pickupSeq: 0,
@@ -348,6 +357,7 @@ function toPublicPlayer(player) {
     shielded: now < (player.shieldUntil || 0),
     dashUntil: player.dashUntil || 0,
     nextDashAt: player.nextDashAt || 0,
+    nextGrenadeAt: player.nextGrenadeAt || 0,
   };
 }
 
@@ -424,13 +434,14 @@ function createBotPlayer(room) {
     rapidFireUntil: 0,
     shieldUntil: 0,
     aimAngle: 0,
-    input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: true, dash: false },
+    input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: true, dash: false, grenade: false },
     color: '#ff9f43',
     patrolX: patrol.x,
     patrolY: patrol.y,
     nextPatrolAt: Date.now() + randomInt(1800, 4200),
     dashUntil: 0,
     nextDashAt: 0,
+    nextGrenadeAt: 0,
   };
 }
 
@@ -676,8 +687,9 @@ io.on('connection', (socket) => {
         shieldUntil: 0,
         dashUntil: 0,
         nextDashAt: 0,
+        nextGrenadeAt: 0,
         aimAngle: 0,
-        input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false },
+        input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false, grenade: false },
         color: randomColor(),
       };
 
@@ -699,6 +711,8 @@ io.on('connection', (socket) => {
           zoneStageMs: ZONE_STAGE_MS,
           zoneDamagePerSec: ZONE_DAMAGE_PER_SEC,
           dashCooldownMs: DASH_COOLDOWN_MS,
+          grenadeCooldownMs: GRENADE_COOLDOWN_MS,
+          grenadeRadius: GRENADE_RADIUS,
           weapons: WEAPONS,
         },
       });
@@ -708,6 +722,7 @@ io.on('connection', (socket) => {
         bullets: [...room.bullets.values()],
         killFeed: room.killFeed,
         pickups: [...room.pickups.values()],
+        grenades: [...room.grenades.values()],
         zone: room.zone,
         serverNow: Date.now(),
       });
@@ -730,6 +745,7 @@ io.on('connection', (socket) => {
         firing: !!msg.payload?.firing,
         moveToAim: !!msg.payload?.moveToAim,
         dash: !!msg.payload?.dash,
+        grenade: !!msg.payload?.grenade,
       };
       player.aimAngle = Number(msg.payload?.aimAngle || 0);
       return;
@@ -828,6 +844,24 @@ function maybeFire(room, player, now) {
   }
 }
 
+function maybeThrowGrenade(room, player, now) {
+  if (!player.alive || !player.input.grenade) return;
+  if (now < (player.nextGrenadeAt || 0)) return;
+  player.nextGrenadeAt = now + GRENADE_COOLDOWN_MS;
+  player.input.grenade = false;
+
+  const id = `${room.id}-g-${room.grenadeSeq++}`;
+  room.grenades.set(id, {
+    id,
+    ownerId: player.id,
+    x: player.x + Math.cos(player.aimAngle) * (PLAYER_RADIUS + 10),
+    y: player.y + Math.sin(player.aimAngle) * (PLAYER_RADIUS + 10),
+    vx: Math.cos(player.aimAngle) * GRENADE_SPEED,
+    vy: Math.sin(player.aimAngle) * GRENADE_SPEED,
+    explodeAt: now + GRENADE_FUSE_MS,
+  });
+}
+
 function updateBotAI(room, bot, now) {
   if (!bot.alive) return;
   const targets = [...room.players.values()].filter((p) => !p.isBot && p.alive);
@@ -867,6 +901,7 @@ function updateBotAI(room, bot, now) {
   const desired = bot.weapon === 'rifle' ? 520 : 420;
   bot.input.moveToAim = best > desired;
   bot.input.firing = best < 520;
+  bot.input.grenade = best > 120 && best < 300 && Math.random() < 0.02;
   if (now % 7000 < 25 && Math.random() > 0.5) {
     bot.weapon = bot.weapon === 'rifle' ? 'pistol' : 'rifle';
   }
@@ -936,6 +971,43 @@ function updateBullets(room, now, dt) {
   }
 }
 
+function explodeGrenade(room, grenade, now) {
+  for (const player of room.players.values()) {
+    if (!player.alive || player.id === grenade.ownerId) continue;
+    const dist = Math.hypot(player.x - grenade.x, player.y - grenade.y);
+    if (dist > GRENADE_RADIUS) continue;
+    const falloff = 1 - dist / GRENADE_RADIUS;
+    const damageMult = now < (player.shieldUntil || 0) ? 0.65 : 1;
+    const dmg = Math.max(8, Math.round(GRENADE_DAMAGE * falloff * damageMult));
+    player.hp -= dmg;
+    player.lastDamagedAt = now;
+    if (player.hp <= 0) {
+      const killer = room.players.get(grenade.ownerId);
+      killPlayer(room, player, killer);
+    }
+  }
+}
+
+function updateGrenades(room, now, dt) {
+  for (const [grenadeId, grenade] of room.grenades.entries()) {
+    const nextX = grenade.x + grenade.vx * dt;
+    const nextY = grenade.y + grenade.vy * dt;
+    grenade.vx *= 0.92;
+    grenade.vy *= 0.92;
+    if (pointInWalkable(room.map, nextX, nextY, 2)) {
+      grenade.x = nextX;
+      grenade.y = nextY;
+    } else {
+      grenade.vx *= -0.4;
+      grenade.vy *= -0.4;
+    }
+    if (now >= grenade.explodeAt) {
+      explodeGrenade(room, grenade, now);
+      room.grenades.delete(grenadeId);
+    }
+  }
+}
+
 function maybeRespawn(room, player, now) {
   if (player.alive) return;
   if (now < player.respawnAt) return;
@@ -970,11 +1042,13 @@ setInterval(() => {
       if (player.isBot) updateBotAI(room, player, now);
       if (player.alive) updatePlayerMovement(room, player, dt);
       maybeFire(room, player, now);
+      maybeThrowGrenade(room, player, now);
       maybeHeal(player, now, dt);
       applyZoneDamage(room, player, dt, now);
     }
 
     updateBullets(room, now, dt);
+    updateGrenades(room, now, dt);
     maybeSpawnPickups(room, now);
     updatePickupCollection(room, now);
 
@@ -983,6 +1057,7 @@ setInterval(() => {
       bullets: [...room.bullets.values()],
       killFeed: room.killFeed,
       pickups: [...room.pickups.values()],
+      grenades: [...room.grenades.values()],
       zone: room.zone,
       serverNow: now,
     });

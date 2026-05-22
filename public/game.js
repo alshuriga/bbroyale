@@ -16,6 +16,7 @@ const joystickBaseEl = document.getElementById('joystickBase');
 const joystickKnobEl = document.getElementById('joystickKnob');
 const fireBtnEl = document.getElementById('fireBtn');
 const dashBtnEl = document.getElementById('dashBtn');
+const grenadeBtnEl = document.getElementById('grenadeBtn');
 const minimapCtx = minimapEl ? minimapEl.getContext('2d') : null;
 
 const state = {
@@ -24,18 +25,21 @@ const state = {
   myId: '',
   players: [],
   bullets: [],
+  grenades: [],
   pickups: [],
   zone: null,
   serverNow: Date.now(),
   killFeed: [],
   rules: null,
   map: null,
-  input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false, aimAngle: 0 },
+  input: { up: false, down: false, left: false, right: false, firing: false, moveToAim: false, dash: false, grenade: false, aimAngle: 0 },
   camX: 0,
   camY: 0,
   renderPlayers: new Map(),
   renderBullets: new Map(),
+  renderGrenades: new Map(),
   localBullets: [],
+  localExplosions: [],
   lastRenderAt: performance.now(),
   lastInputSentAt: 0,
   lastMouseSentAt: 0,
@@ -217,6 +221,16 @@ function initMobileControls() {
       { passive: false }
     );
   }
+  if (grenadeBtnEl) {
+    grenadeBtnEl.addEventListener(
+      'touchstart',
+      (e) => {
+        e.preventDefault();
+        triggerGrenade();
+      },
+      { passive: false }
+    );
+  }
 
   const updateGlobalTouch = (touch) => {
     if (state.mobile.stickTouchId == null || !state.mobile.active) return;
@@ -276,7 +290,7 @@ function initMobileControls() {
 
 function inputSignature() {
   const i = state.input;
-  return `${+i.up}${+i.down}${+i.left}${+i.right}${+i.firing}${+i.moveToAim}${+i.dash}|${i.aimAngle.toFixed(3)}`;
+  return `${+i.up}${+i.down}${+i.left}${+i.right}${+i.firing}${+i.moveToAim}${+i.dash}${+i.grenade}|${i.aimAngle.toFixed(3)}`;
 }
 
 function sendInput(force = false) {
@@ -293,6 +307,13 @@ function triggerDash() {
   state.input.dash = true;
   sendInput(true);
   state.input.dash = false;
+  sendInput(true);
+}
+
+function triggerGrenade() {
+  state.input.grenade = true;
+  sendInput(true);
+  state.input.grenade = false;
   sendInput(true);
 }
 
@@ -329,6 +350,7 @@ function connectAndJoin(name) {
     if (msg.type === 'room_state') {
       state.players = msg.payload.players;
       state.bullets = msg.payload.bullets;
+      state.grenades = msg.payload.grenades || [];
       state.killFeed = msg.payload.killFeed;
       state.pickups = msg.payload.pickups || [];
       state.zone = msg.payload.zone || null;
@@ -354,6 +376,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '1') send('weapon', { weapon: 'pistol' });
   if (e.key === '2') send('weapon', { weapon: 'rifle' });
   if (e.key === 'Shift' || e.key === ' ') triggerDash();
+  if (e.key.toLowerCase() === 'e') triggerGrenade();
   sendInput(true);
 });
 
@@ -428,6 +451,8 @@ function syncRenderState() {
     existing.name = p.name;
     existing.rapidFire = !!p.rapidFire;
     existing.shielded = !!p.shielded;
+    existing.nextDashAt = p.nextDashAt || 0;
+    existing.nextGrenadeAt = p.nextGrenadeAt || 0;
   }
   for (const id of [...state.renderPlayers.keys()]) {
     if (!nextPlayers.has(id)) state.renderPlayers.delete(id);
@@ -449,6 +474,27 @@ function syncRenderState() {
   }
   for (const id of [...state.renderBullets.keys()]) {
     if (!nextBullets.has(id)) state.renderBullets.delete(id);
+  }
+
+  const nextGrenades = new Set();
+  for (const g of state.grenades) {
+    nextGrenades.add(g.id);
+    const existing = state.renderGrenades.get(g.id);
+    if (!existing) {
+      state.renderGrenades.set(g.id, { ...g, prevX: g.x, prevY: g.y });
+      continue;
+    }
+    existing.prevX = existing.x;
+    existing.prevY = existing.y;
+    existing.x = g.x;
+    existing.y = g.y;
+  }
+  for (const id of [...state.renderGrenades.keys()]) {
+    if (!nextGrenades.has(id)) {
+      const gone = state.renderGrenades.get(id);
+      if (gone) state.localExplosions.push({ x: gone.x, y: gone.y, ttl: 260, maxTtl: 260 });
+      state.renderGrenades.delete(id);
+    }
   }
 }
 
@@ -737,6 +783,29 @@ function render() {
     b.y += (b.targetY - b.y) * BULLET_LERP;
   }
 
+  for (const g of state.renderGrenades.values()) {
+    const s = worldToScreen(g.x, g.y);
+    ctx.fillStyle = '#c07f2d';
+    ctx.fillRect(Math.round(s.x - 4), Math.round(s.y - 4), 8, 8);
+    ctx.fillStyle = '#ffe5a6';
+    ctx.fillRect(Math.round(s.x - 1), Math.round(s.y - 1), 2, 2);
+  }
+
+  state.localExplosions = state.localExplosions.filter((e) => {
+    e.ttl -= frameDt * 1000;
+    return e.ttl > 0;
+  });
+  for (const e of state.localExplosions) {
+    const s = worldToScreen(e.x, e.y);
+    const k = 1 - e.ttl / e.maxTtl;
+    const r = 10 + Math.round(k * 38);
+    ctx.strokeStyle = `rgba(255, 196, 107, ${1 - k})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(Math.round(s.x), Math.round(s.y), r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   state.localBullets = state.localBullets.filter((b) => {
     b.x += b.vx * frameDt;
     b.y += b.vy * frameDt;
@@ -870,7 +939,10 @@ function render() {
       : '<span class="dead">Respawning...</span>';
     weaponEl.textContent = `Weapon: ${me.weapon === 'rifle' ? 'Rifle [2]' : 'Pistol [1]'}`;
     const dashLeft = Math.max(0, Math.round((me.nextDashAt || 0) - Date.now()));
-    dashStatusEl.textContent = dashLeft > 0 ? `Dash: ${(dashLeft / 1000).toFixed(1)}s` : 'Dash: READY [Shift]';
+    const grenadeLeft = Math.max(0, Math.round((me.nextGrenadeAt || 0) - Date.now()));
+    const dashText = dashLeft > 0 ? `Dash ${(dashLeft / 1000).toFixed(1)}s` : 'Dash READY';
+    const grenadeText = grenadeLeft > 0 ? `Gren ${(grenadeLeft / 1000).toFixed(1)}s` : 'Gren READY';
+    dashStatusEl.textContent = `${dashText} | ${grenadeText}`;
   }
 
   scoreboardEl.innerHTML = [...state.renderPlayers.values()]
